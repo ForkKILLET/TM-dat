@@ -1,16 +1,16 @@
 // ==UserScript==
-// @name		 TM dat
-// @namespace	https://icelava.root
-// @version	  0.2
-// @description  Nested, type secure and auto saving data proxy on Tampermonkey.
-// @author	   ForkKILLET
-// @match		localhost:1633/*
+// @name			TM dat
+// @namespace		https://icelava.root
+// @version			0.2.1
+// @description		Nested, type secure and auto saving data proxy on Tampermonkey.
+// @author			ForkKILLET
+// @match			localhost:1633/*
 // @noframes
-// @icon		 data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==
-// @grant		unsafeWindow
-// @grant		GM_listValues
-// @grant		GM_getValue
-// @grant		GM_setValue
+// @icon			data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==
+// @grant			unsafeWindow
+// @grant			GM_listValues
+// @grant			GM_getValue
+// @grant			GM_setValue
 // ==/UserScript==
 
 "use strict"
@@ -87,11 +87,11 @@ const proxy_dat = (dat, scm, oldRoot, old = oldRoot) => {
 	})
 }
 
-const load_dat = (lvs, autoSave) => {
+const load_dat = (lvs, autoSave, old) => {
 	const dat = {}; load_dat.dat = dat
 	if (autoSave) window.addEventListener("beforeunload", () => save_dat())
 	return proxy_dat(dat, { lvs },
-		GM_listValues().reduce((o, k) => (
+		old ?? GM_listValues().reduce((o, k) => (
 			o[k] = JSON.parse(GM_getValue(k) ?? "null"), o
 		), {})
 	)
