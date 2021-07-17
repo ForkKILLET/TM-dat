@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name			TM dat
 // @namespace		https://icelava.root
-// @version			0.2.1
+// @version			0.3
 // @description		Nested, type secure and auto saving data proxy on Tampermonkey.
 // @author			ForkKILLET
 // @match			localhost:1633/*
@@ -11,6 +11,7 @@
 // @grant			GM_listValues
 // @grant			GM_getValue
 // @grant			GM_setValue
+// @grant			GM_deleteValue
 // ==/UserScript==
 
 "use strict"
@@ -30,26 +31,30 @@ type_dat.convert = {
 	number_boolean: v => !! v
 }
 
-const proxy_dat = (dat, scm, oldRoot, old = oldRoot) => {
+let raw_dat
+
+const proxy_dat = (dat, map, scm, oldRoot, old = oldRoot) => {
 	const lvs = {}
 	for (let k in scm.lvs) {
-		const s = scm.lvs[k]
-		s.path = (scm.path ?? "") + (s.root ? "!" : ".") + k
-		s.pathRoot = s.root ? "!" + s.path : scm.pathRoot ?? k
+		const s = map(scm.lvs[k])
+
+		s.path = (scm.path ?? "") + "." + k
+		s.pathRoot = s.root ? "#" + s.path : scm.pathRoot ?? k
 		s.raw = (s.root ? null : scm.raw) ?? (() => dat[k])
 
 		switch (s.ty) {
 		case "object":
-			lvs[k] = proxy_dat(dat[k] = {}, s, oldRoot, old[k])
+			dat[k] = {}
 			break
 		case "tuple":
 			s.lvs = s.lvs.map(i => Array.from({ length: i.repeat ?? 1 }, () => i)).flat()
-			lvs[k] = proxy_dat(dat[k] = [], s, oldRoot, old[k])
+			dat[k] = []
 			break
 		default:
-			lvs[k] = dat[k] = (s.root ? oldRoot[s.pathRoot] : old[k]) ?? s.dft
+			lvs[k] = dat[k] = (s.root ? oldRoot[s.pathRoot] : old?.[k]) ?? s.dft
 			break
 		}
+		lvs[k] ??= proxy_dat(dat[k], map, s, oldRoot, old?.[k])
 	}
 	return new Proxy(lvs, {
 		get: (_, k) => lvs[k],
@@ -87,21 +92,32 @@ const proxy_dat = (dat, scm, oldRoot, old = oldRoot) => {
 	})
 }
 
-const load_dat = (lvs, autoSave, old) => {
-	const dat = {}; load_dat.dat = dat
+const load_dat = (lvs, { autoSave, old, map }) => {
+	if (raw_dat) err("Error", `Dat cannot be loaded multiple times.`)
+	raw_dat = {}
+
 	if (autoSave) window.addEventListener("beforeunload", () => save_dat())
-	return proxy_dat(dat, { lvs },
+
+	return proxy_dat(
+		raw_dat,
+		map ?? (s => s),
+		{ lvs },
 		old ?? GM_listValues().reduce((o, k) => (
 			o[k] = JSON.parse(GM_getValue(k) ?? "null"), o
 		), {})
 	)
 }
 
-const save_dat = (dat = load_dat.dat) => {
+const save_dat = (dat = raw_dat) => {
 	Object.keys(dat).forEach(k => GM_setValue(k, JSON.stringify(dat[k])))
 }
 
+const clear_dat = () => {
+	raw_dat = null
+	GM_listValues().forEach(GM_deleteValue)
+}
+
 if (location.host === "localhost:1633") Object.assign(unsafeWindow, {
-	TM_dat: { type_dat, proxy_dat, load_dat, save_dat }
+	TM_dat: { type_dat, proxy_dat, load_dat, save_dat, clear_dat, raw_dat }
 })
 
