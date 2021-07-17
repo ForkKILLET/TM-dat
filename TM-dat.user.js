@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name			TM dat
 // @namespace		https://icelava.root
-// @version			0.3
+// @version			0.3.1
 // @description		Nested, type secure and auto saving data proxy on Tampermonkey.
 // @author			ForkKILLET
 // @match			localhost:1633/*
@@ -42,19 +42,19 @@ const proxy_dat = (dat, map, scm, oldRoot, old = oldRoot) => {
 		s.pathRoot = s.root ? "#" + s.path : scm.pathRoot ?? k
 		s.raw = (s.root ? null : scm.raw) ?? (() => dat[k])
 
-		switch (s.ty) {
+		let rec; switch (s.ty) {
 		case "object":
-			dat[k] = {}
+			dat[k] = {}; rec = true
 			break
 		case "tuple":
 			s.lvs = s.lvs.map(i => Array.from({ length: i.repeat ?? 1 }, () => i)).flat()
-			dat[k] = []
+			dat[k] = []; rec = true
 			break
 		default:
 			lvs[k] = dat[k] = (s.root ? oldRoot[s.pathRoot] : old?.[k]) ?? s.dft
 			break
 		}
-		lvs[k] ??= proxy_dat(dat[k], map, s, oldRoot, old?.[k])
+		if (rec) lvs[k] = proxy_dat(dat[k], map, s, oldRoot, old?.[k])
 	}
 	return new Proxy(lvs, {
 		get: (_, k) => lvs[k],
