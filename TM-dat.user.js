@@ -47,7 +47,7 @@ const proxy_dat = (dat, map, scm, oldRoot, old = oldRoot) => {
 			dat[k] = {}; rec = true
 			break
 		case "tuple":
-			s.lvs = s.lvs.map(i => Array.from({ length: i.repeat ?? 1 }, () => i)).flat()
+			s.lvs = s.lvs.map(i => Array.from({ length: i.repeat ?? 1 }, () => JSON.parse(JSON.stringify(i)))).flat()
 			dat[k] = []; rec = true
 			break
 		default:
