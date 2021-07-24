@@ -1,10 +1,10 @@
 // ==UserScript==
 // @name			TM dat
 // @namespace		https://icelava.root
-// @version			0.3.1
+// @version			0.4.0
 // @description		Nested, type secure and auto saving data proxy on Tampermonkey.
 // @author			ForkKILLET
-// @match			localhost:1633/*
+// @match			http://localhost:1633/*
 // @noframes
 // @icon			data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==
 // @grant			unsafeWindow
@@ -15,6 +15,8 @@
 // ==/UserScript==
 
 "use strict"
+
+Object.clone = o => JSON.parse(JSON.stringify(o))
 
 const err = (t, m) => { throw window[t](`[TM dat] ${m}`) }
 
@@ -35,40 +37,121 @@ let raw_dat
 
 const proxy_dat = (dat, map, scm, oldRoot, old = oldRoot) => {
 	const lvs = {}
-	for (let k in scm.lvs) {
-		const s = map(scm.lvs[k])
-
+	const ini_scm = (s, k) => {
 		s.path = (scm.path ?? "") + "." + k
 		s.pathRoot = s.root ? "#" + s.path : scm.pathRoot ?? k
 		s.raw = (s.root ? null : scm.raw) ?? (() => dat[k])
 
-		let rec; switch (s.ty) {
+		switch (s.ty) {
 		case "object":
-			dat[k] = {}; rec = true
+			s.rec = 1
+			dat[k] = {}
 			break
 		case "tuple":
-			s.lvs = s.lvs.map(i => Array.from({ length: i.repeat ?? 1 }, () => JSON.parse(JSON.stringify(i)))).flat()
-			dat[k] = []; rec = true
+			s.rec = 1
+			s.lvs = s.lvs.map(i => Array.from({ length: i.repeat ?? 1 }, () => Object.clone(i)).flat())
+			dat[k] = []
+			break
+		case "array":
+			s.rec = 2
+			s.lvs = []
+			s.api = {
+				get length() {
+					return s.lvs.length
+				},
+				push(v) {
+					lvs[k][ s.lvs.length ] = v
+				},
+				pop() {
+					const v = lvs[k][ s.lvs.length - 1 ]
+					delete lvs[k][ s.lvs.length - 1 ]
+					s.lvs.length --
+					return v
+				},
+				pushArr(a) {
+					a.forEach(v => lvs[k][ s.lvs.length ] = v)
+				},
+				*[Symbol.iterator] () {
+					for (const k_ in s.lvs) yield lvs[k][k_]
+				}
+			}
+			dat[k] = []
 			break
 		default:
-			lvs[k] = dat[k] = (s.root ? oldRoot[s.pathRoot] : old?.[k]) ?? s.dft
+			dft_scm(s, k)
 			break
 		}
-		if (rec) lvs[k] = proxy_dat(dat[k], map, s, oldRoot, old?.[k])
+		if (s.rec) {
+			lvs[k] = proxy_dat(dat[k], map, s, oldRoot, old?.[k])
+		}
 	}
-	return new Proxy(lvs, {
-		get: (_, k) => lvs[k],
+	const dft_scm = (s, k) => {
+		lvs[k] = dat[k] = (s.root ? oldRoot[s.pathRoot] : old?.[k]) ?? s.dft ?? null
+	}
+
+	switch (scm.rec) {
+	case 1:
+		for (let k in scm.lvs) ini_scm(map(scm.lvs[k]), k)
+		break
+	case 2:
+		const keys = map(scm.itm).root
+			? Object.keys(oldRoot).map(k => k.match(`^#${scm.path}\.([^.])+$`.replaceAll(".", "\\."))?.[1]).filter(k => k)
+			: Object.keys(old)
+		keys.forEach(k => ini_scm(map(scm.lvs[k] = Object.clone(scm.itm)), k))
+		break
+	}
+
+	const eP = `Parent ${scm.ty} @ ${scm.path}`
+
+	const cAR = k => {
+		if (scm.ty === "array") {
+			const eR = eP + ` requires the index to be in [ ${scm.minIdx ??= 0}, ${scm.maxIdx ??= +Infinity} ], but got ${k}. `
+			if (k < scm.minIdx || k > scm.maxIdx) err("RangeError", eR)
+		}
+	}
+
+	const P = new Proxy(lvs, {
+		get: (_, k) => {
+			cAR(k)
+
+			if (scm.api && k in scm.api) return scm.api[k]
+			return lvs[k]
+		},
+
 		set: (_, k, v) => {
+			cAR(k)
+
+			if (! scm.lvs[k]) {
+				switch (scm.rec) {
+				case 1:
+					err("TypeError", eP + ` doesn't have leaf ${k}.`)
+					break
+				case 2:
+					ini_scm(map(scm.lvs[k] = Object.clone(scm.itm)), k)
+					break
+				}
+			}
+
+			if (scm.api && k in scm.api) {
+				err("TypeError", eP + ` has API ${k}. Failed.`)
+			}
 			const s = scm.lvs[k]
-			const eF = `Field @ ${s.path}`, eS = "Failed strictly."
-			if (s.locked) err("TypeError", eF + ` is locked, but was attempted to write.`)
+
+			const eF = `Leaf @ ${s.path}`, eS = "Failed strictly.", eT = eF + ` is ${ [ "simple", "fixed complex", "flexible complex" ] } type, `
+			if (s.locked) err("TypeError", eF + ` is locked, but was attempted to modify.`)
 
 			if (s.ty === "enum" && ! s.vals.includes(v)) {
 				err("TypeError", eF + ` requires to be in the enum { ${ s.vals.join(", ") } }, but got ${v}.`)
 			}
 
 			const ty = type_dat(v)
-			if (! [ "any", "enum" ].includes(s.ty) && ty !== s.ty) {
+
+			if (ty === "undefined") {
+				if (scm.rec === 1) err("TypeError", eT + `but its ` + eF + " was attempted to delete.")
+				if (s.rec) err("TypeError", eT + `but it was attempted to delete`)
+			}
+
+			else if (! [ "any", "enum" ].includes(s.ty) && ty !== s.ty) {
 				const eM = eF + ` requires type ${s.ty}, but got ${ty}: ${v}. `
 				if (s.strict) err("TypeError", eM + eS)
 				const f = type_dat.convert[`${ty}_${s.ty}`]
@@ -77,7 +160,7 @@ const proxy_dat = (dat, map, scm, oldRoot, old = oldRoot) => {
 			}
 
 			if (s.ty === "number") {
-				let eR = eF + ` requires to be in the range [ ${s.min ??= -Infinity}, ${s.max ??= +Infinity} ], but got ${v}. `
+				const eR = eF + ` requires to be in [ ${s.min ??= -Infinity}, ${s.max ??= +Infinity} ], but got ${v}. `
 				if (v < s.min || v > s.max) err("RangeError", eR)
 
 				if (s.int) {
@@ -87,9 +170,24 @@ const proxy_dat = (dat, map, scm, oldRoot, old = oldRoot) => {
 			}
 
 			lvs[k] = dat[k] = v
-			if (s.quick || s.root) GM_setValue(s.pathRoot, JSON.stringify(s.raw()))
-		}
+			if (s.quick || s.root) {
+				const vRoot = s.raw()
+				if (vRoot === undefined) GM_deleteValue(s.pathRoot)
+				else GM_setValue(s.pathRoot, JSON.stringify(vRoot))
+			}
+
+			return true
+		},
+
+		deleteProperty: (_, k) => {
+			P[k] = undefined
+			return true
+		},
+
+		has: (_, k) => k in dat
 	})
+
+	return P
 }
 
 const load_dat = (lvs, { autoSave, old, map }) => {
@@ -101,7 +199,7 @@ const load_dat = (lvs, { autoSave, old, map }) => {
 	return proxy_dat(
 		raw_dat,
 		map ?? (s => s),
-		{ lvs },
+		{ lvs, rec: 1 },
 		old ?? GM_listValues().reduce((o, k) => (
 			o[k] = JSON.parse(GM_getValue(k) ?? "null"), o
 		), {})
@@ -117,7 +215,8 @@ const clear_dat = () => {
 	GM_listValues().forEach(GM_deleteValue)
 }
 
+// Debug
 if (location.host === "localhost:1633") Object.assign(unsafeWindow, {
-	TM_dat: { type_dat, proxy_dat, load_dat, save_dat, clear_dat, raw_dat }
+	TM_dat: { type_dat, proxy_dat, load_dat, save_dat, clear_dat, raw_dat: () => raw_dat }
 })
 
