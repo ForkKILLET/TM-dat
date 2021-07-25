@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name			TM dat
 // @namespace		https://icelava.root
-// @version			0.4.0
+// @version			0.4.1
 // @description		Nested, type secure and auto saving data proxy on Tampermonkey.
 // @author			ForkKILLET
 // @match			http://localhost:1633/*
@@ -21,7 +21,7 @@ Object.clone = o => JSON.parse(JSON.stringify(o))
 const err = (t, m) => { throw window[t](`[TM dat] ${m}`) }
 
 const type_dat = v =>
-	v === null		  ? "null"   :
+	v === null			? "null"   :
 	v instanceof Array  ? "array"  :
 	v instanceof RegExp ? "regexp" :
 	typeof v
@@ -104,6 +104,7 @@ const proxy_dat = (dat, map, scm, oldRoot, old = oldRoot) => {
 	const eP = `Parent ${scm.ty} @ ${scm.path}`
 
 	const cAR = k => {
+		if (typeof k === "symbol") return
 		if (scm.ty === "array") {
 			const eR = eP + ` requires the index to be in [ ${scm.minIdx ??= 0}, ${scm.maxIdx ??= +Infinity} ], but got ${k}. `
 			if (k < scm.minIdx || k > scm.maxIdx) err("RangeError", eR)
