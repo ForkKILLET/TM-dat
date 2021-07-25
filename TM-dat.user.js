@@ -59,17 +59,22 @@ const proxy_dat = (dat, map, scm, oldRoot, old = oldRoot) => {
 				get length() {
 					return s.lvs.length
 				},
-				push(v) {
-					lvs[k][ s.lvs.length ] = v
+				push(...a) {
+					a.forEach(v => lvs[k][ s.lvs.length ] = v)
 				},
 				pop() {
-					const v = lvs[k][ s.lvs.length - 1 ]
-					delete lvs[k][ s.lvs.length - 1 ]
+					const l = s.lvs.length
+					const v = lvs[k][ l - 1 ]
+					delete lvs[k][ l - 1 ]
 					s.lvs.length --
 					return v
 				},
-				pushArr(a) {
-					a.forEach(v => lvs[k][ s.lvs.length ] = v)
+				splice(i, n) {
+					const l = s.lvs.length
+					n = Math.min(l - i, n)
+					for(; i < l; i ++)
+						lvs[k][i] = i + n < l ? lvs[k][ i + n ] : undefined
+					s.lvs.length -= n
 				},
 				*[Symbol.iterator] () {
 					for (const k_ in s.lvs) yield lvs[k][k_]

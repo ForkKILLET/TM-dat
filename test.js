@@ -17,3 +17,6 @@ $("#load_dat").onclick = () => {
 $("#save_dat").onclick = () =>
     TM_dat.save_dat()
 
+$("#clear_dat").onclick = () =>
+    TM_dat.clear_dat()
+
