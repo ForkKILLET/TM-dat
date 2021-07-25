@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name			TM dat
 // @namespace		https://icelava.root
-// @version			0.4.1
+// @version			0.4.3
 // @description		Nested, type secure and auto saving data proxy on Tampermonkey.
 // @author			ForkKILLET
 // @match			http://localhost:1633/*
@@ -49,7 +49,7 @@ const proxy_dat = (dat, map, scm, oldRoot, old = oldRoot) => {
 			break
 		case "tuple":
 			s.rec = 1
-			s.lvs = s.lvs.map(i => Array.from({ length: i.repeat ?? 1 }, () => Object.clone(i)).flat())
+			s.lvs = s.lvs.map(i => Array.from({ length: i.repeat ?? 1 }, () => Object.clone(i))).flat()
 			dat[k] = []
 			break
 		case "array":
@@ -127,15 +127,13 @@ const proxy_dat = (dat, map, scm, oldRoot, old = oldRoot) => {
 		set: (_, k, v) => {
 			cAR(k)
 
-			if (! scm.lvs[k]) {
-				switch (scm.rec) {
-				case 1:
-					err("TypeError", eP + ` doesn't have leaf ${k}.`)
-					break
-				case 2:
-					ini_scm(map(scm.lvs[k] = Object.clone(scm.itm)), k)
-					break
-				}
+			if (! scm.lvs[k]) switch (scm.rec) {
+			case 1:
+				err("TypeError", eP + ` doesn't have leaf ${k}.`)
+				break
+			case 2:
+				ini_scm(map(scm.lvs[k] = Object.clone(scm.itm)), k)
+				break
 			}
 
 			if (scm.api && k in scm.api) {

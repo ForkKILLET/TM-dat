@@ -5,7 +5,7 @@ window.onload = () =>
 
 $("#load_dat").onclick = () => {
 	const scm = $("textarea").value
-    window.sto = TM_dat.load_dat(eval(`(${scm})`), {
+    window.sto = TM_dat.load_dat(window.scm = eval(`(${scm})`), {
 		map: $("#root_map").checked ? s => {
 			s.root = ! [ "object", "tuple", "array" ].includes(s.ty)
 			return s
