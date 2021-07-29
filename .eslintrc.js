@@ -50,6 +50,6 @@ module.exports = {
 	},
 	globals: [
 		"TM_dat"
-	].reduce((o, k) => { o[k] = true }, {})
+	].reduce((o, k) => (o[k] = true, o), {})
 }
 

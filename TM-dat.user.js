@@ -90,10 +90,7 @@ const init_scm = (A, k, tar, isNew) => {
 	const { dat, map, scm, oldRoot, old } = A
 	if (isNew) scm.lvs[k] = Object.clone(scm.itm)
 	const s = scm.lvs[k]
-
 	s.path = (scm.path ?? "") + "." + k
-	s.pathRoot = s.root ? "#" + s.path : scm.pathRoot ?? k
-	s.raw = (s.root ? null : scm.raw) ?? (() => dat[k])
 
 	const proto = proto_scm[s.ty]
 	s.rec = proto?.rec ?? 0
@@ -105,7 +102,10 @@ const init_scm = (A, k, tar, isNew) => {
 	if (s.ty === "tuple") s.lvs = s.lvs.map(
 		i => Array.from({ length: i.repeat ?? 1 }, () => Object.clone(i))
 	).flat()
+
 	map(s)
+	s.pathRoot = s.root ? "#" + s.path : scm.pathRoot ?? k
+	s.raw = (s.root ? null : scm.raw) ?? (() => dat[k])
 
 	const Ak = {
 		dat: dat[k],
@@ -120,9 +120,8 @@ const init_scm = (A, k, tar, isNew) => {
 	if (proto?.api) s.api = proto.api(Ak, s, tar[k])
 }
 
-
 const proxy_dat = A => {
-	const { dat, map, scm, oldRoot, old } = A
+	const { dat, scm, oldRoot, old } = A
 	const tar = {}
 
 	switch (scm.rec) {
@@ -130,8 +129,8 @@ const proxy_dat = A => {
 		for (let k in scm.lvs) init_scm(A, k, tar)
 		break
 	case 2:
-		const keys = map(scm.itm).root
-			? Object.keys(oldRoot).map(k => k.match(`^#${scm.path}\.([^.])+$`.replaceAll(".", "\\."))?.[1]).filter(k => k)
+		const keys = scm.itmRoot
+			? Object.keys(oldRoot).map(k => k.match(String.raw`^#${scm.path}\.([^.]+)`)?.[1]).filter(k => k)
 			: Object.keys(old ?? {})
 		keys.forEach(k => init_scm(A, k, tar, true))
 		break

@@ -1,15 +1,16 @@
 const $ = s => document.querySelector(s)
-const TM_dat = window.TM_dat
 
 window.onload = () =>
 	$("textarea").value = localStorage.scm ?? "{}"
 
-$("#load_dat").onclick = () => {
+const $load_dat = $("#load_dat")
+$load_dat.onclick = () => {
+	$load_dat.disabled = true
 	const scm = $("textarea").value
 	window.sto = TM_dat.load_dat(window.scm = eval(`(${scm})`), {
 		map: $("#root_map").checked ? s => {
-			s.root = ! [ "object", "tuple", "array" ].includes(s.ty)
-			return s
+			s.root = ! s.rec
+			s.itmRoot = s.rec === 2
 		} : undefined
 	})
 	localStorage.scm = scm
@@ -21,7 +22,7 @@ $("#save_dat").onclick = () =>
 $("#clear_dat").onclick = () =>
 	TM_dat.clear_dat()
 
-const tests = []
+const _tests = []
 
 $("#test").onclick = () => {
 	document.body.innerHTML = ""
