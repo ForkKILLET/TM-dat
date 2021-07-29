@@ -20,11 +20,13 @@ Object.clone = o => JSON.parse(JSON.stringify(o))
 
 const err = (t, m) => { throw window[t](`[TM dat] ${m}`) }
 
+/* eslint-disable */
 const type_dat = v =>
 	v === null			? "null"   :
 	v instanceof Array  ? "array"  :
 	v instanceof RegExp ? "regexp" :
 	typeof v
+/* eslint-enable */
 
 type_dat.convert = {
 	string_number:  v => + v,
@@ -35,79 +37,107 @@ type_dat.convert = {
 
 let raw_dat
 
-const proxy_dat = (dat, map, scm, oldRoot, old = oldRoot) => {
-	const lvs = {}
-	const ini_scm = (s, k) => {
-		s.path = (scm.path ?? "") + "." + k
-		s.pathRoot = s.root ? "#" + s.path : scm.pathRoot ?? k
-		s.raw = (s.root ? null : scm.raw) ?? (() => dat[k])
-
-		switch (s.ty) {
-		case "object":
-			s.rec = 1
-			dat[k] = {}
-			break
-		case "tuple":
-			s.rec = 1
-			s.lvs = s.lvs.map(i => Array.from({ length: i.repeat ?? 1 }, () => Object.clone(i))).flat()
-			dat[k] = []
-			break
-		case "array":
-			s.rec = 2
-			s.lvs = []
-			s.api = {
-				get length() {
-					return s.lvs.length
-				},
-				push(...a) {
-					a.forEach(v => lvs[k][ s.lvs.length ] = v)
-				},
-				pop() {
-					const l = s.lvs.length
-					const v = lvs[k][ l - 1 ]
-					delete lvs[k][ l - 1 ]
-					s.lvs.length --
-					return v
-				},
-				splice(i, n) {
-					const l = s.lvs.length
-					n = Math.min(l - i, n)
-					for(; i < l; i ++)
-						lvs[k][i] = i + n < l ? lvs[k][ i + n ] : undefined
-					s.lvs.length -= n
-				},
-				*[Symbol.iterator] () {
-					for (const k_ in s.lvs) yield lvs[k][k_]
-				}
+const proto_scm = {
+	object:	{ rec: 1, ctn: () => ({}) },
+	tuple:	{ rec: 1, ctn: () => [] },
+	array:	{ rec: 2, ctn: () => [], api: (A, s, P) => ({
+		$new(k, n = 1) {
+			for (let j = k; j < k + n; j ++) {
+				const scm = A.scm.lvs[j]
+				if (scm) err("ReferenceError", `Leaf @ ${scm.path} already exists, but was attempted to re-new.`)
+				init_scm(A, j, P, true)
 			}
-			dat[k] = []
-			break
-		default:
-			dft_scm(s, k)
-			break
+		},
+		get $length() {
+			return s.lvs.length
+		},
+		$push(...a) {
+			a.forEach(v => P[ s.lvs.length ] = v)
+		},
+		$pop() {
+			const l = s.lvs.length
+			const v = P[ l - 1 ]
+			delete P[ l - 1 ]
+			s.lvs.length --
+			return v
+		},
+		$splice(k, n) {
+			const l = s.lvs.length
+			n = Math.min(l - k, n)
+			for(; k < l; k ++)
+				P[k] = k + n < l ? P[ k + n ] : undefined
+			s.lvs.length -= n
+		},
+		$find(f) {
+			for (const k in s.lvs) {
+				const v = P[k]
+				if (f(v)) return v
+			}
+		},
+		$findIndex(f) {
+			for (const k in s.lvs) {
+				const v = P[k]
+				if (f(v)) return k
+			}
+		},
+		*[Symbol.iterator] () {
+			for (const k in s.lvs) yield P[k]
 		}
-		if (s.rec) {
-			lvs[k] = proxy_dat(dat[k], map, s, oldRoot, old?.[k])
-		}
+	}) },
+}
+
+const init_scm = (A, k, tar, isNew) => {
+	const { dat, map, scm, oldRoot, old } = A
+	if (isNew) scm.lvs[k] = Object.clone(scm.itm)
+	const s = scm.lvs[k]
+
+	s.path = (scm.path ?? "") + "." + k
+	s.pathRoot = s.root ? "#" + s.path : scm.pathRoot ?? k
+	s.raw = (s.root ? null : scm.raw) ?? (() => dat[k])
+
+	const proto = proto_scm[s.ty]
+	s.rec = proto?.rec ?? 0
+	if (s.rec) {
+		dat[k] = proto.ctn()
+		if (s.rec > 1) s.lvs = proto.ctn()
 	}
-	const dft_scm = (s, k) => {
-		lvs[k] = dat[k] = (s.root ? oldRoot[s.pathRoot] : old?.[k]) ?? s.dft ?? null
+
+	if (s.ty === "tuple") s.lvs = s.lvs.map(
+		i => Array.from({ length: i.repeat ?? 1 }, () => Object.clone(i))
+	).flat()
+	map(s)
+
+	const Ak = {
+		dat: dat[k],
+		map,
+		scm: s,
+		oldRoot,
+		old: old?.[k]
 	}
+	if (s.rec) tar[k] = proxy_dat(Ak)
+	else tar[k] = dat[k] = (s.root ? oldRoot[s.pathRoot] : old?.[k]) ?? s.dft ?? null
+
+	if (proto?.api) s.api = proto.api(Ak, s, tar[k])
+}
+
+
+const proxy_dat = A => {
+	const { dat, map, scm, oldRoot, old } = A
+	const tar = {}
 
 	switch (scm.rec) {
 	case 1:
-		for (let k in scm.lvs) ini_scm(map(scm.lvs[k]), k)
+		for (let k in scm.lvs) init_scm(A, k, tar)
 		break
 	case 2:
 		const keys = map(scm.itm).root
 			? Object.keys(oldRoot).map(k => k.match(`^#${scm.path}\.([^.])+$`.replaceAll(".", "\\."))?.[1]).filter(k => k)
-			: Object.keys(old)
-		keys.forEach(k => ini_scm(map(scm.lvs[k] = Object.clone(scm.itm)), k))
+			: Object.keys(old ?? {})
+		keys.forEach(k => init_scm(A, k, tar, true))
 		break
 	}
 
 	const eP = `Parent ${scm.ty} @ ${scm.path}`
-
 	const cAR = k => {
 		if (typeof k === "symbol") return
 		if (scm.ty === "array") {
@@ -115,13 +145,12 @@ const proxy_dat = (dat, map, scm, oldRoot, old = oldRoot) => {
 			if (k < scm.minIdx || k > scm.maxIdx) err("RangeError", eR)
 		}
 	}
-
-	const P = new Proxy(lvs, {
+	const P = new Proxy(tar, {
 		get: (_, k) => {
-			cAR(k)
-
 			if (scm.api && k in scm.api) return scm.api[k]
-			return lvs[k]
+
+			cAR(k)
+			return tar[k]
 		},
 
 		set: (_, k, v) => {
@@ -132,7 +161,7 @@ const proxy_dat = (dat, map, scm, oldRoot, old = oldRoot) => {
 				err("TypeError", eP + ` doesn't have leaf ${k}.`)
 				break
 			case 2:
-				ini_scm(map(scm.lvs[k] = Object.clone(scm.itm)), k)
+				init_scm(A, k, tar, true)
 				break
 			}
 
@@ -173,7 +202,7 @@ const proxy_dat = (dat, map, scm, oldRoot, old = oldRoot) => {
 				}
 			}
 
-			lvs[k] = dat[k] = v
+			tar[k] = dat[k] = v
 			if (s.quick || s.root) {
 				const vRoot = s.raw()
 				if (vRoot === undefined) GM_deleteValue(s.pathRoot)
@@ -188,7 +217,7 @@ const proxy_dat = (dat, map, scm, oldRoot, old = oldRoot) => {
 			return true
 		},
 
-		has: (_, k) => k in dat
+		has: (_, k) => k in scm.lvs
 	})
 
 	return P
@@ -198,16 +227,18 @@ const load_dat = (lvs, { autoSave, old, map }) => {
 	if (raw_dat) err("Error", `Dat cannot be loaded multiple times.`)
 	raw_dat = {}
 
+	old ??= GM_listValues().reduce((o, k) => (
+		o[k] = JSON.parse(GM_getValue(k) ?? "null"), o
+	), {})
+
 	if (autoSave) window.addEventListener("beforeunload", () => save_dat())
 
-	return proxy_dat(
-		raw_dat,
-		map ?? (s => s),
-		{ lvs, rec: 1 },
-		old ?? GM_listValues().reduce((o, k) => (
-			o[k] = JSON.parse(GM_getValue(k) ?? "null"), o
-		), {})
-	)
+	return proxy_dat({
+		dat: raw_dat,
+		scm: { lvs, rec: 1 },
+		map: map ?? (s => s),
+		old, oldRoot: old
+	})
 }
 
 const save_dat = (dat = raw_dat) => {
