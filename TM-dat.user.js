@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name			TM dat
 // @namespace		https://icelava.root
-// @version			0.4.3
+// @version			0.5.2
 // @description		Nested, type secure and auto saving data proxy on Tampermonkey.
 // @author			ForkKILLET
 // @match			http://localhost:1633/*
@@ -53,6 +53,7 @@ const proto_scm = {
 		},
 		$push(...a) {
 			a.forEach(v => P[ s.lvs.length ] = v)
+			return s.lvs.length
 		},
 		$pop() {
 			const l = s.lvs.length
@@ -114,10 +115,12 @@ const init_scm = (A, k, tar, isNew) => {
 		oldRoot,
 		old: old?.[k]
 	}
-	if (s.rec) tar[k] = proxy_dat(Ak)
+
+	let tarP
+	if (s.rec) [ tarP, tar[k] ] = proxy_dat(Ak)
 	else tar[k] = dat[k] = (s.root ? oldRoot[s.pathRoot] : old?.[k]) ?? s.dft ?? null
 
-	if (proto?.api) s.api = proto.api(Ak, s, tar[k])
+	if (proto?.api) s.api = proto.api(Ak, s, tarP)
 }
 
 const proxy_dat = A => {
@@ -219,7 +222,7 @@ const proxy_dat = A => {
 		has: (_, k) => k in scm.lvs
 	})
 
-	return P
+	return [ P, tar ]
 }
 
 const load_dat = (lvs, { autoSave, old, map }) => {
@@ -237,7 +240,7 @@ const load_dat = (lvs, { autoSave, old, map }) => {
 		scm: { lvs, rec: 1 },
 		map: map ?? (s => s),
 		old, oldRoot: old
-	})
+	}) [0]
 }
 
 const save_dat = (dat = raw_dat) => {
