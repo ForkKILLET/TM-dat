@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name			TM dat
 // @namespace		https://icelava.root
-// @version			0.5.3
+// @version			0.6.0
 // @description		Nested, type secure and auto saving data proxy on Tampermonkey.
 // @author			ForkKILLET
 // @match			http://localhost:1633/*
@@ -40,12 +40,12 @@ let raw_dat
 const proto_scm = {
 	object:	{ rec: 1, ctn: () => ({}) },
 	tuple:	{ rec: 1, ctn: () => [] },
-	array:	{ rec: 2, ctn: () => [], api: (A, s, P, tar_k) => ({
-		$new(k, n = 1) {
-			for (let j = k; j < k + n; j ++) {
+	array:	{ rec: 2, ctn: () => [], api: (A, s, P, tar) => ({
+		$new(i, n = 1) {
+			for (const j = i + n; i < j; i ++) {
 				const scm = A.scm.lvs[j]
 				if (scm) err("ReferenceError", `Leaf @ ${scm.path} already exists, but was attempted to re-new.`)
-				init_scm(A, j, tar_k, true)
+				init_scm(A, j, tar, true)
 			}
 		},
 		get $length() {
@@ -55,6 +55,10 @@ const proto_scm = {
 			a.forEach(v => P[ s.lvs.length ] = v)
 			return s.lvs.length
 		},
+		$fill(v, i = 0, j = s.lvs.length) {
+			for (; i < j; i ++) P[i] = v
+			return P
+		},
 		$pop() {
 			const l = s.lvs.length
 			const v = P[ l - 1 ]
@@ -62,24 +66,58 @@ const proto_scm = {
 			s.lvs.length --
 			return v
 		},
-		$splice(k, n) {
+		$splice(i, n = 1) { // Note: Unsafe `=`.
 			const l = s.lvs.length
-			n = Math.min(l - k, n)
-			for(; k < l; k ++)
-				P[k] = k + n < l ? P[ k + n ] : undefined
+			n = Math.min(l - i, n)
+			for(; i < l; i ++)
+				P[i] = i + n < l ? P[ i + n ] : undefined
 			s.lvs.length -= n
 		},
+		$reverse() { // Note: Unsafe `=`.
+			const l = s.lvs.length
+			const m = ~~ (l / 2)
+			for (let i = 0; i < m; i ++) if (i in s.lvs)
+				[ P[i], P[l - i - 1] ] = [ P[l - i - 1], P[i] ]
+			return P
+		},
+		$includes(v) {
+			const l = s.lvs.length
+			for (let i = 0; i < l; i ++) if (i in s.lvs)
+				if (v === P[i]) return true
+			return false
+		},
+		$indexOf(v) {
+			const l = s.lvs.length
+			for (let i = 0; i < l; i ++) if (i in s.lvs)
+				if (v === P[i]) return + i
+			return -1
+		},
+		$lastIndexOf(v) {
+			for (let i = s.lvs.length - 1; i >= 0; i --) if (i in s.lvs)
+				if (v === P[i]) return + i
+			return -1
+		},
 		$find(f) {
-			for (const k in s.lvs) {
-				const v = P[k]
+			const l = s.lvs.length
+			for (let i = 0; i < l; i ++) if (i in s.lvs) {
+				const v = P[i]
 				if (f(v)) return v
 			}
 		},
 		$findIndex(f) {
-			for (const k in s.lvs) {
-				const v = P[k]
-				if (f(v)) return k
+			const l = s.lvs.length
+			for (let i = 0; i < l; i ++) if (i in s.lvs) {
+				const v = P[i]
+				if (f(v)) return + i
 			}
+		},
+		$forEach(f) {
+			const l = s.lvs.length
+			for (let i = 0; i < l; i ++) if (i in s.lvs)
+				f(P[i], + i, P)
+		},
+		$at(i) {
+			return i < 0 ? P[ s.lvs.length + i ] : P[i]
 		},
 		*[Symbol.iterator] () {
 			for (const k in s.lvs) yield P[k]
@@ -100,9 +138,9 @@ const init_scm = (A, k, tar, isNew) => {
 		if (s.rec > 1) s.lvs = proto.ctn()
 	}
 
-	if (s.ty === "tuple") s.lvs = s.lvs.map(
+	if (s.ty === "tuple") s.lvs = s.lvs.flatMap(
 		i => Array.from({ length: i.repeat ?? 1 }, () => Object.clone(i))
-	).flat()
+	)
 
 	map(s)
 	s.pathRoot = s.root ? "#" + s.path : scm.pathRoot ?? k
