@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name			TM dat
 // @namespace		https://icelava.root
-// @version			0.5.2
+// @version			0.5.3
 // @description		Nested, type secure and auto saving data proxy on Tampermonkey.
 // @author			ForkKILLET
 // @match			http://localhost:1633/*
@@ -117,7 +117,7 @@ const init_scm = (A, k, tar, isNew) => {
 	}
 
 	let tarP
-	if (s.rec) [ tarP, tar[k] ] = proxy_dat(Ak)
+	if (s.rec) [ tar[k], tarP ] = proxy_dat(Ak)
 	else tar[k] = dat[k] = (s.root ? oldRoot[s.pathRoot] : old?.[k]) ?? s.dft ?? null
 
 	if (proto?.api) s.api = proto.api(Ak, s, tarP)
