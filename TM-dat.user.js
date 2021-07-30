@@ -40,12 +40,12 @@ let raw_dat
 const proto_scm = {
 	object:	{ rec: 1, ctn: () => ({}) },
 	tuple:	{ rec: 1, ctn: () => [] },
-	array:	{ rec: 2, ctn: () => [], api: (A, s, P) => ({
+	array:	{ rec: 2, ctn: () => [], api: (A, s, P, tar_k) => ({
 		$new(k, n = 1) {
 			for (let j = k; j < k + n; j ++) {
 				const scm = A.scm.lvs[j]
 				if (scm) err("ReferenceError", `Leaf @ ${scm.path} already exists, but was attempted to re-new.`)
-				init_scm(A, j, P, true)
+				init_scm(A, j, tar_k, true)
 			}
 		},
 		get $length() {
@@ -116,11 +116,11 @@ const init_scm = (A, k, tar, isNew) => {
 		old: old?.[k]
 	}
 
-	let tarP
-	if (s.rec) [ tar[k], tarP ] = proxy_dat(Ak)
+	let tar_k
+	if (s.rec) [ tar[k], tar_k ] = proxy_dat(Ak)
 	else tar[k] = dat[k] = (s.root ? oldRoot[s.pathRoot] : old?.[k]) ?? s.dft ?? null
 
-	if (proto?.api) s.api = proto.api(Ak, s, tarP)
+	if (proto?.api) s.api = proto.api(Ak, s, tar[k], tar_k)
 }
 
 const proxy_dat = A => {
