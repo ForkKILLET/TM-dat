@@ -13,12 +13,12 @@ findIndex			V		V
 lastIndexOf			-
 pop					V		V
 push				V		V
-reverse				V&		V
+reverse				V@		V
 shift				-
 unshift				-
 slice				&
 sort				-
-splice				V&		V
+splice				V@-		V
 includes			-
 indexOf				-
 join				-

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name			TM dat
 // @namespace		https://icelava.root
-// @version			0.6.0
+// @version			0.7.0
 // @description		Nested, type secure and auto saving data proxy on Tampermonkey.
 // @author			ForkKILLET
 // @match			http://localhost:1633/*
@@ -22,9 +22,10 @@ const err = (t, m) => { throw window[t](`[TM dat] ${m}`) }
 
 /* eslint-disable */
 const type_dat = v =>
-	v === null			? "null"   :
-	v instanceof Array  ? "array"  :
-	v instanceof RegExp ? "regexp" :
+	v?.__scm__?.ty		? v.__scm__.ty	:
+	v === null			? "null"		:
+	v instanceof Array  ? "array"		:
+	v instanceof RegExp ? "regexp"		:
 	typeof v
 /* eslint-enable */
 
@@ -40,7 +41,7 @@ let raw_dat
 const proto_scm = {
 	object:	{ rec: 1, ctn: () => ({}) },
 	tuple:	{ rec: 1, ctn: () => [] },
-	array:	{ rec: 2, ctn: () => [], api: (A, s, P, tar) => ({
+	array:	{ rec: 2, ctn: () => [], api: (A, P, s = P.__scm__, tar = P.__tar__) => ({
 		$new(i, n = 1) {
 			for (const j = i + n; i < j; i ++) {
 				const scm = A.scm.lvs[j]
@@ -66,18 +67,26 @@ const proto_scm = {
 			s.lvs.length --
 			return v
 		},
-		$splice(i, n = 1) { // Note: Unsafe `=`.
+		$splice(i, n) {
 			const l = s.lvs.length
+			n ??= l
 			n = Math.min(l - i, n)
 			for(; i < l; i ++)
 				P[i] = i + n < l ? P[ i + n ] : undefined
 			s.lvs.length -= n
 		},
-		$reverse() { // Note: Unsafe `=`.
+		$swap(i, j) {
+			P.__tmp__ = P[i]
+			P[i] = P[j]
+			P[j] = P.__tmp__
+			delete P.__tmp__
+		},
+		$reverse() {
 			const l = s.lvs.length
 			const m = ~~ (l / 2)
-			for (let i = 0; i < m; i ++) if (i in s.lvs)
-				[ P[i], P[l - i - 1] ] = [ P[l - i - 1], P[i] ]
+			for (let i = 0; i < m; i ++) if (i in s.lvs) {
+				P.$swap(i, l - i - 1)
+			}
 			return P
 		},
 		$includes(v) {
@@ -154,11 +163,10 @@ const init_scm = (A, k, tar, isNew) => {
 		old: old?.[k]
 	}
 
-	let tar_k
-	if (s.rec) [ tar[k], tar_k ] = proxy_dat(Ak)
+	if (s.rec) tar[k] = proxy_dat(Ak)
 	else tar[k] = dat[k] = (s.root ? oldRoot[s.pathRoot] : old?.[k]) ?? s.dft ?? null
 
-	if (proto?.api) s.api = proto.api(Ak, s, tar[k], tar_k)
+	if (proto?.api) s.api = proto.api(Ak, tar[k])
 }
 
 const proxy_dat = A => {
@@ -187,6 +195,8 @@ const proxy_dat = A => {
 	}
 	const P = new Proxy(tar, {
 		get: (_, k) => {
+			if (k === "__scm__") return scm
+			if (k === "__tar__") return tar
 			if (scm.api && k in scm.api) return scm.api[k]
 
 			cAR(k)
@@ -210,7 +220,7 @@ const proxy_dat = A => {
 			}
 			const s = scm.lvs[k]
 
-			const eF = `Leaf @ ${s.path}`, eS = "Failed strictly.", eT = eF + ` is ${ [ "simple", "fixed complex", "flexible complex" ] } type, `
+			const eF = `Leaf @ ${s.path}`, eS = "Failed strictly.", eT = eF + ` is ${ [ "simple", "fixed complex", "flexible complex" ][s.rec] } type, `
 			if (s.locked) err("TypeError", eF + ` is locked, but was attempted to modify.`)
 
 			if (s.ty === "enum" && ! s.vals.includes(v)) {
@@ -220,8 +230,20 @@ const proxy_dat = A => {
 			const ty = type_dat(v)
 
 			if (ty === "undefined") {
-				if (scm.rec === 1) err("TypeError", eT + `but its ` + eF + " was attempted to delete.")
-				if (s.rec) err("TypeError", eT + `but it was attempted to delete`)
+				if (scm.rec === 1 && ! scm.del) err("TypeError", eT + `but its ` + eF + " was attempted to delete.")
+				if (s.rec) {
+					s.del = true
+					for (let j in s.lvs) delete tar[k][j]
+				}
+				delete scm.lvs[k]
+			}
+
+			else if (
+				ty === "array"	&& s.lvs instanceof Array ||
+				ty === "object"	&& s.lvs && ! (s.lvs instanceof Array)
+			) {
+				for (let j in s.lvs) tar[k][j] = v[j]
+				return true
 			}
 
 			else if (! [ "any", "enum" ].includes(s.ty) && ty !== s.ty) {
@@ -260,7 +282,7 @@ const proxy_dat = A => {
 		has: (_, k) => k in scm.lvs
 	})
 
-	return [ P, tar ]
+	return P
 }
 
 const load_dat = (lvs, { autoSave, old, map }) => {
@@ -278,7 +300,7 @@ const load_dat = (lvs, { autoSave, old, map }) => {
 		scm: { lvs, rec: 1 },
 		map: map ?? (s => s),
 		old, oldRoot: old
-	}) [0]
+	})
 }
 
 const save_dat = (dat = raw_dat) => {
