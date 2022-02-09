@@ -1,6 +1,6 @@
 # TM-dat
 
-_Nested, type secure and auto saving data proxy on Tampermonkey._
+_Nested, type secure and auto saving data proxy on TamperMonkey._
 
 # Exports
 
@@ -12,9 +12,9 @@ Return the type of `v`, including `null`, `undefined`, `number`, `string`, `bool
 
 The raw data used by `load_dat`.
 
-## `proxy_dat(dat, map, scm, oldRoot, old = oldRoot)
+## `proxy_dat(dat, map, scm, oldRoot, old = oldRoot)`
 
-...
+WIP
 
 ## `load_dat(lvs, { autoSave, old, map })`
 
@@ -32,4 +32,12 @@ Clear storage and `raw_dat`, which allow to call `load_dat` again.
 # Schema
 
 A schema is a JSON to describe how to build and check data.
+
+The root of a schema should be a `SchemaNode`.
+
+Type definitions and examples can be found at [schema.ts](./schema.ts).
+
+# Data APIs
+
+For APIs on `{ ty: "array" }`, see [this](./ArrayAPI.md)
 
