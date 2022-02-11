@@ -1,10 +1,10 @@
 // ==UserScript==
 // @name			TM dat
 // @namespace		https://icelava.root
-// @version			0.7.0
+// @version			0.8.0
 // @description		Nested, type secure and auto saving data proxy on Tampermonkey.
 // @author			ForkKILLET
-// @match			http://localhost:1633/*
+// @include			http://localhost:1633/*
 // @noframes
 // @icon			data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==
 // @grant			unsafeWindow
@@ -147,8 +147,24 @@ const init_scm = (A, k, tar, isNew) => {
 		if (s.rec > 1) s.lvs = proto.ctn()
 	}
 
+	const eS = s => JSON.stringify(s, null, 2) + ": "
+
+	if (s.ty === "enum") {
+		s.get ??= "val"
+		s.set ??= "val"
+		if (s.get !== "both" && s.set === "both") err("SyntaxError", eS(s) + `{ ty: "enum" → ¬(get: "both" ∧ set: ¬ "both") }`)
+	}
 	if (s.ty === "tuple") s.lvs = s.lvs.flatMap(
-		i => Array.from({ length: i.repeat ?? 1 }, () => Object.clone(i))
+		i => {
+			let r = 1
+			if ("repeat" in i) {
+				r = i.repeat
+				if (typeof r !== "number" || r < 0 || r % 1)
+					err("SyntaxError", eS(s) + `{ ty: "tuple" → itm: [ ∀ i: { repeat?: integer } } ]`)
+				delete i.repeat
+			}
+			return Array.from({ length: r }, () => Object.clone(i))
+		}
 	)
 
 	map(s)
@@ -199,6 +215,31 @@ const proxy_dat = A => {
 			if (k === "__tar__") return tar
 			if (scm.api && k in scm.api) return scm.api[k]
 
+			const s = scm.lvs[k]
+			if (s.ty === "enum") switch (s.get) {
+			case "id":
+				return tar[k]
+			case "val":
+				return s.vals[tar[k]]
+			case "both":
+				return {
+					get id() { return tar[k] },
+					set id(v) {
+						const o_set = s.set
+						s.set = "id"
+						P[k] = v
+						s.set = o_set
+					},
+					get val() { return s.vals[tar[k]] },
+					set val(v) {
+						const o_set = s.set
+						s.set = "val"
+						P[k] = v
+						s.set = o_set
+					},
+				}
+			}
+
 			cAR(k)
 			return tar[k]
 		},
@@ -222,10 +263,6 @@ const proxy_dat = A => {
 
 			const eF = `Leaf @ ${s.path}`, eS = "Failed strictly.", eT = eF + ` is ${ [ "simple", "fixed complex", "flexible complex" ][s.rec] } type, `
 			if (s.locked) err("TypeError", eF + ` is locked, but was attempted to modify.`)
-
-			if (s.ty === "enum" && ! s.vals.includes(v)) {
-				err("TypeError", eF + ` requires to be in the enum { ${ s.vals.join(", ") } }, but got ${v}.`)
-			}
 
 			const ty = type_dat(v)
 
@@ -255,13 +292,27 @@ const proxy_dat = A => {
 			}
 
 			if (s.ty === "number") {
-				const eR = eF + ` requires to be in [ ${s.min ??= -Infinity}, ${s.max ??= +Infinity} ], but got ${v}. `
+				const eR = eF + ` requires to be in [ ${ s.min ?? -Infinity }, ${ s.max ?? +Infinity } ], but got ${v}. `
 				if (v < s.min || v > s.max) err("RangeError", eR)
 
-				if (s.int) {
+				if (s.int && v % 1) {
 					if (s.strict) err("RangeError", eF + ` requires to be an integer. ` + eS)
 					v = ~~ v
 				}
+			}
+
+			else if (s.ty === "enum") switch (s.set) {
+			case "id":
+				if (typeof v !== "number" || ! v in s.vals)
+					err("RangeError", eF + ` requires to be an enum index in [ ${0}, ${s.vals.length} ], but got ${v}.`)
+				break
+			case "val":
+				v = s.vals.findIndex(val => val === v)
+				if (v < 0)
+					err("RangeError", eF + ` requires to be in the enum { ${ s.vals.join(", ") } }, but got ${v}.`)
+				break
+			case "both":
+				err("TypeError", eF + ` is an enum accepting both id and value ways of modification, but was attempted to modify without using any setter.`)
 			}
 
 			tar[k] = dat[k] = v
