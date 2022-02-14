@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name			TM dat
 // @namespace		https://icelava.root
-// @version			0.8.0
+// @version			0.8.1
 // @description		Nested, type secure and auto saving data proxy on Tampermonkey.
 // @author			ForkKILLET
 // @include			http://localhost:1633/*
@@ -46,7 +46,7 @@ const proto_scm = {
 			for (const j = i + n; i < j; i ++) {
 				const scm = A.scm.lvs[j]
 				if (scm) err("ReferenceError", `Leaf @ ${scm.path} already exists, but was attempted to re-new.`)
-				init_scm(A, j, tar, true)
+				init_scm(A, j, P, tar, true)
 			}
 		},
 		get $length() {
@@ -134,7 +134,7 @@ const proto_scm = {
 	}) },
 }
 
-const init_scm = (A, k, tar, isNew) => {
+const init_scm = (A, k, P, tar, isNew) => {
 	const { dat, map, scm, oldRoot, old } = A
 	if (isNew) scm.lvs[k] = Object.clone(scm.itm)
 	const s = scm.lvs[k]
@@ -180,7 +180,7 @@ const init_scm = (A, k, tar, isNew) => {
 	}
 
 	if (s.rec) tar[k] = proxy_dat(Ak)
-	else tar[k] = dat[k] = (s.root ? oldRoot[s.pathRoot] : old?.[k]) ?? s.dft ?? null
+	else P[k] = (s.root ? oldRoot[s.pathRoot] : old?.[k]) ?? s.dft ?? null
 
 	if (proto?.api) s.api = proto.api(Ak, tar[k])
 }
@@ -188,18 +188,6 @@ const init_scm = (A, k, tar, isNew) => {
 const proxy_dat = A => {
 	const { dat, scm, oldRoot, old } = A
 	const tar = {}
-
-	switch (scm.rec) {
-	case 1:
-		for (let k in scm.lvs) init_scm(A, k, tar)
-		break
-	case 2:
-		const keys = scm.itmRoot
-			? Object.keys(oldRoot).map(k => k.match(String.raw`^#${scm.path}\.([^.]+)`)?.[1]).filter(k => k)
-			: Object.keys(old ?? {})
-		keys.forEach(k => init_scm(A, k, tar, true))
-		break
-	}
 
 	const eP = `Parent ${scm.ty} @ ${scm.path}`
 	const cAR = k => {
@@ -252,7 +240,7 @@ const proxy_dat = A => {
 				err("TypeError", eP + ` doesn't have leaf ${k}.`)
 				break
 			case 2:
-				init_scm(A, k, tar, true)
+				init_scm(A, k, P, tar, true)
 				break
 			}
 
@@ -332,6 +320,18 @@ const proxy_dat = A => {
 
 		has: (_, k) => k in scm.lvs
 	})
+
+	switch (scm.rec) {
+	case 1:
+		for (let k in scm.lvs) init_scm(A, k, P, tar)
+		break
+	case 2:
+		const keys = scm.itmRoot
+			? Object.keys(oldRoot).map(k => k.match(String.raw`^#${scm.path}\.([^.]+)`)?.[1]).filter(k => k)
+			: Object.keys(old ?? {})
+		keys.forEach(k => init_scm(A, k, P, tar, true))
+		break
+	}
 
 	return P
 }

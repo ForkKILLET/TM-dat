@@ -24,7 +24,7 @@ const number_example: NumberNode = {
 	integer: false,
 	min: -114,
 	max: 514,
-	dft: 191 // Default is not checked, `1919.810` can pass
+	dft: 191
 }
 
 interface BooleanNode extends SimpleNode<boolean> {
@@ -53,7 +53,7 @@ interface EnumNode<vals extends any[]> extends SimpleNode<vals[number]> {
 const enum_example: EnumNode<[ "A", "C" ]> = {
 	ty: "enum",
 	vals: [ "A", "C" ],
-	dft: "A" // Default is not checked, `"B"` can pass
+	dft: "A"
 }
 
 interface FixedComplexNode extends SchemaNode {
