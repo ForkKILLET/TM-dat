@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name			TM dat
 // @namespace		https://icelava.root
-// @version			0.8.1
+// @version			0.8.3
 // @description		Nested, type secure and auto saving data proxy on Tampermonkey.
 // @author			ForkKILLET
 // @include			http://localhost:1633/*
@@ -152,6 +152,12 @@ const init_scm = (A, k, P, tar, isNew) => {
 	if (s.ty === "enum") {
 		s.get ??= "val"
 		s.set ??= "val"
+		s.fromOld = v => {
+			let set = s.set
+			s.set = "id"
+			P[k] = v
+			s.set = set
+		}
 		if (s.get !== "both" && s.set === "both") err("SyntaxError", eS(s) + `{ ty: "enum" → ¬(get: "both" ∧ set: ¬ "both") }`)
 	}
 	if (s.ty === "tuple") s.lvs = s.lvs.flatMap(
@@ -181,8 +187,12 @@ const init_scm = (A, k, P, tar, isNew) => {
 
 	if (s.rec) tar[k] = proxy_dat(Ak)
 	else {
-		const v = (s.root ? oldRoot[s.pathRoot] : old?.[k]) ?? s.dft ?? null
-		if (v !== null) P[k] = v
+		let old = s.root ? oldRoot[s.pathRoot] : old?.[k]
+		if (old !== undefined) {
+			if (s.ty === "enum") s.fromOld(old)
+			else P[k] = old
+		}
+		else if ("dft" in s) P[k] = s.dft
 	}
 
 	if (proto?.api) s.api = proto.api(Ak, tar[k])
