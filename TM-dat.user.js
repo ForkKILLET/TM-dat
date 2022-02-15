@@ -180,7 +180,10 @@ const init_scm = (A, k, P, tar, isNew) => {
 	}
 
 	if (s.rec) tar[k] = proxy_dat(Ak)
-	else P[k] = (s.root ? oldRoot[s.pathRoot] : old?.[k]) ?? s.dft ?? null
+	else {
+		const v = (s.root ? oldRoot[s.pathRoot] : old?.[k]) ?? s.dft ?? null
+		if (v !== null) P[k] = v
+	}
 
 	if (proto?.api) s.api = proto.api(Ak, tar[k])
 }
