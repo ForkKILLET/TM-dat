@@ -16,9 +16,21 @@
 
 "use strict"
 
-Object.clone = o => JSON.parse(JSON.stringify(o))
+const clone = o => JSON.parse(JSON.stringify(o))
 
 const err = (t, m) => { throw window[t](`[TM dat] ${m}`) }
+
+const op = "GM" in Window ? {
+	get: GM_getValue,
+	set: GM_setValue,
+	del: GM_deleteValue,
+	list: GM_listValues
+} : {
+	get: k => localStorage.getItem(k),
+	set: (k, v) => localStorage.setItem(k, v),
+	del: k => localStorage.removeItem(k),
+	list: () => Object.keys(localStorage)
+}
 
 /* eslint-disable */
 const type_dat = v =>
@@ -83,7 +95,7 @@ const proto_scm = {
 		},
 		$reverse() {
 			const l = s.lvs.length
-			const m = ~~ (l / 2)
+			const m = Math.floor(l / 2)
 			for (let i = 0; i < m; i ++) if (i in s.lvs) {
 				P.$swap(i, l - i - 1)
 			}
@@ -136,7 +148,7 @@ const proto_scm = {
 
 const init_scm = (A, k, P, tar, isNew) => {
 	const { dat, map, scm, oldRoot, old } = A
-	if (isNew) scm.lvs[k] = Object.clone(scm.itm)
+	if (isNew) scm.lvs[k] = clone(scm.itm)
 	const s = scm.lvs[k]
 	s.path = (scm.path ?? "") + "." + k
 
@@ -169,7 +181,7 @@ const init_scm = (A, k, P, tar, isNew) => {
 					err("SyntaxError", eS(s) + `{ ty: "tuple" → itm: [ ∀ i: { repeat?: integer } } ]`)
 				delete i.repeat
 			}
-			return Array.from({ length: r }, () => Object.clone(i))
+			return Array.from({ length: r }, () => clone(i))
 		}
 	)
 
@@ -187,10 +199,10 @@ const init_scm = (A, k, P, tar, isNew) => {
 
 	if (s.rec) tar[k] = proxy_dat(Ak)
 	else {
-		let old = s.root ? oldRoot[s.pathRoot] : old?.[k]
-		if (old !== undefined) {
-			if (s.ty === "enum") s.fromOld(old)
-			else P[k] = old
+		let old_v = s.root ? oldRoot[s.pathRoot] : old?.[k]
+		if (old_v !== undefined) {
+			if (s.ty === "enum") s.fromOld(old_v)
+			else P[k] = old_v
 		}
 		else if ("dft" in s) P[k] = s.dft
 	}
@@ -298,7 +310,7 @@ const proxy_dat = A => {
 
 				if (s.int && v % 1) {
 					if (s.strict) err("RangeError", eF + ` requires to be an integer. ` + eS)
-					v = ~~ v
+					v = Math.floor(v)
 				}
 			}
 
@@ -319,8 +331,8 @@ const proxy_dat = A => {
 			tar[k] = dat[k] = v
 			if (s.quick || s.root) {
 				const vRoot = s.raw()
-				if (vRoot === undefined) GM_deleteValue(s.pathRoot)
-				else GM_setValue(s.pathRoot, JSON.stringify(vRoot))
+				if (vRoot === undefined) op.del(s.pathRoot)
+				else op.set(s.pathRoot, JSON.stringify(vRoot))
 			}
 
 			return true
@@ -354,7 +366,7 @@ const load_dat = (lvs, { autoSave, old, map }) => {
 	raw_dat = {}
 
 	old ??= GM_listValues().reduce((o, k) => (
-		o[k] = JSON.parse(GM_getValue(k) ?? "null"), o
+		o[k] = op.get(k), o
 	), {})
 
 	if (autoSave) window.addEventListener("beforeunload", () => save_dat())
@@ -368,12 +380,12 @@ const load_dat = (lvs, { autoSave, old, map }) => {
 }
 
 const save_dat = (dat = raw_dat) => {
-	Object.keys(dat).forEach(k => GM_setValue(k, JSON.stringify(dat[k])))
+	Object.keys(dat).forEach(k => op.set(k, JSON.stringify(dat[k])))
 }
 
 const clear_dat = () => {
 	raw_dat = null
-	GM_listValues().forEach(GM_deleteValue)
+	op.list().forEach(op.del)
 }
 
 // Debug

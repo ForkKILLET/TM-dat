@@ -1,0 +1,8 @@
+{
+  "name": "proxy-dat",
+  "version": "0.8.4",
+  "main": "TM-dat.user.js",
+  "repository": "git@github.com:ForkKILLET/TM-dat.git",
+  "author": "ForkΨKILLET <fork_killet@qq.com>",
+  "license": "MIT"
+}
