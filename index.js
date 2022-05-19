@@ -335,7 +335,7 @@ export const createProxy = A => {
 			if (s.quick || s.root) {
 				const vRoot = s.raw()
 				if (vRoot === undefined) access.del(s.pathRoot)
-				else access.set(s.pathRoot, JSON.stringify(vRoot))
+				else access.set(s.pathRoot, vRoot)
 			}
 
 			return true
@@ -386,7 +386,7 @@ export class ProxyData {
 	}
 
 	saveData(data) {
-		Object.keys(data ?? this.raw).forEach(k => this.access.set(k, JSON.stringify(data[k])))
+		Object.keys(data ?? this.raw).forEach(k => this.access.set(k, data[k]))
 	}
 
 	clearData() {
