@@ -368,6 +368,7 @@ export class ProxyData {
 	loadData(lvs, { access, autoSave, old, map }) {
 		if (this.raw) err('Error', `ProxyData cannot be loaded multiple times.`)
 		this.raw = {}
+		this.access = access
 
 		old ??= access.list().reduce((o, k) => (
 			o[k] = access.get(k), o
