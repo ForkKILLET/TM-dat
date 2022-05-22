@@ -386,8 +386,8 @@ export class ProxyData {
 		})
 	}
 
-	saveData(data) {
-		Object.keys(data ?? this.raw).forEach(k => this.access.set(k, data[k]))
+	saveData(data = this.raw) {
+		Object.keys(data).forEach(k => this.access.set(k, data[k]))
 	}
 
 	clearData() {
